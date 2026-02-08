@@ -5,10 +5,6 @@ import Data.List (tails, nub)
 import qualified Data.Set as S
 import System.Random (randomRIO)
 
-goodExample = [1,2,5,7]
-
-badExample = [1,2,3]
-
 uniquePairs :: [a] -> [(a, a)]
 uniquePairs l = [(x, y) | (x:ys) <- tails l, y <- ys]
 
@@ -19,16 +15,16 @@ pairWise :: [a] -> [(a,a)]
 pairWise l = uniquePairs l ++ doubles l
 
 -- all pairwise sums are distinct
-siddon :: [Int] -> Bool
-siddon nbrs = let pairs = pairWise nbrs
-                  psums = map (uncurry (+)) pairs
-               in length psums == length (nub psums)
+sidon :: [Int] -> Bool
+sidon nbrs = let pairs = pairWise nbrs
+                 psums = map (uncurry (+)) pairs
+              in length psums == length (nub psums)
 
 differenceSet :: (Num a, Eq a, Ord a) => [a] -> S.Set a
 differenceSet s = let dlist = [ a - b
                                 | a <- s
                                 , b <- s
-                                , a /= b 
+                                , a /= b
                                 ]
                    in S.fromList (0 : dlist)
 
@@ -44,12 +40,18 @@ getUniqueRandoms n lo hi = go n S.empty []
         then go remaining seen acc
         else go (remaining - 1) (S.insert r seen) (r : acc)
 
-isSidon = siddon goodExample
-notSidon = siddon badExample
+disjointDifferenceSidonSet :: [Int] -> [Int] -> Bool
+disjointDifferenceSidonSet a b = let sidon_a = sidon a
+                                     sidon_b = sidon b
+                                     diff_a = differenceSet a
+                                     diff_b = differenceSet b
+                                     zeroSet = S.singleton 0
+                                  in sidon_a && sidon_b && S.intersection diff_a diff_b == zeroSet
+
 
 maybeSidon :: Int -> Int -> IO (Maybe [Int])
 maybeSidon size upper = do rs <- getUniqueRandoms size 0 upper
-                           let result = if siddon rs then Just rs else Nothing
+                           let result = if sidon rs then Just rs else Nothing
                            return result
 
 tryMaybeSidon :: Int -> Int -> Int -> IO (Maybe [Int])
@@ -60,9 +62,27 @@ tryMaybeSidon size upper maxTries = do
     Just _  -> return result
     Nothing -> tryMaybeSidon size upper (maxTries - 1)
 
+example :: [Integer]
+example = [7,83,67]
+
+
+findDisjointSidonSets :: [Int] -> Int -> Int -> Int -> IO (Maybe [Int])
+findDisjointSidonSets sidona size upper maxTries = do
+  sidonb <- tryMaybeSidon size upper maxTries
+  case sidonb of
+    Just b -> if disjointDifferenceSidonSet sidona b then 
+                return $ Just b 
+              else 
+                findDisjointSidonSets sidona size upper (maxTries - 1)
+
+    Nothing -> findDisjointSidonSets sidona size upper (maxTries - 1)
+
+
 main :: IO ()
 main = do
-  result <- tryMaybeSidon 4 100 100
-  case result of
-    Just xs -> putStrLn $ "Found Sidon set: " ++ show xs
+  sidona <- tryMaybeSidon 4 100 100
+  case sidona of
+    Just a -> do putStrLn $ "Found Sidon set: " ++ show a
+                 b <- findDisjointSidonSets a 4 100 100
+                 putStrLn $ "Found disjoiint Sidon set: " ++ show b
     Nothing -> putStrLn "Failed to find Sidon set after 100 tries"
